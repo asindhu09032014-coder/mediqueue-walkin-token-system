@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MediQueue - Walk-In Patient Token & Waiting-Time Coordination</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%22><text y=%2226%22 font-size=%2224%22>🏥</text></svg>">
+</head>
+<body>
+
+  <!-- ============================================================ -->
+  <!-- TOAST NOTIFICATION CONTAINER                                 -->
+  <!-- ============================================================ -->
+  <div id="toast-stack" class="toast-stack"></div>
+
+  <!-- ============================================================ -->
+  <!-- MAIN NAVIGATION HEADER (Always Visible on Public / Shell)    -->
+  <!-- ============================================================ -->
+  <header class="landing-nav" id="main-nav">
+    <div class="brand-badge" onclick="App.navigate('landing')" style="cursor: pointer;">
+      <div class="brand-logo-icon">🏥</div>
+      <div>
+        <div style="font-weight: 800; font-size: 1.15rem; letter-spacing: -0.02em; color: var(--color-primary-dark);" class="clinic-name-text">MediQueue Clinical Care</div>
+        <div style="font-size: 0.72rem; color: var(--color-text-secondary); letter-spacing: 0.04em; text-transform: uppercase;">Walk-In Waiting-Time Coordination</div>
+      </div>
+    </div>
+
+    <nav class="nav-links">
+      <a href="#landing" class="nav-link" data-target="landing" onclick="App.navigate('landing')">Overview</a>
+      <a href="#board" class="nav-link" data-target="board" onclick="App.navigate('board')">
+        <span class="live-pulse" style="width: 7px; height: 7px; margin-right: 4px;"></span>
+        Reception Queue Board
+      </a>
+      <a href="#app/tokens" class="nav-link" data-target="app" onclick="App.navigate('app')">Staff & Admin Console</a>
+    </nav>
+
+    <div class="flex items-center gap-3">
+      <!-- Quick Demo Switcher Pill -->
+      <div class="demo-switcher-dropdown" style="display: flex; align-items: center; gap: 6px; background: var(--color-surface); padding: 4px 8px; border-radius: var(--radius-full); border: 1px solid var(--color-border); font-size: 0.8rem;">
+        <span style="color: var(--color-text-secondary); font-weight: 600;">Demo Role:</span>
+        <button class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 0.75rem;" onclick="App.demoLogin('admin')">Admin</button>
+        <button class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 0.75rem;" onclick="App.demoLogin('staff')">Reception</button>
+        <button class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 0.75rem;" onclick="App.demoLogin('doctor')">Doctor</button>
+        <button class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 0.75rem;" onclick="App.demoLogin('patient')">Patient</button>
+      </div>
+
+      <!-- User Profile Badge or Login Button -->
+      <button id="nav-login-btn" class="btn btn-primary btn-sm" onclick="App.openLoginModal()">Login</button>
+      <div id="nav-user-badge" class="flex items-center gap-2 hidden"></div>
+    </div>
+  </header>
+
+  <!-- ============================================================ -->
+  <!-- VIEW 1: CALM CLINICAL LANDING PAGE                           -->
+  <!-- ============================================================ -->
+  <main id="view-landing">
+    <!-- Hero Section -->
+    <section class="hero-section">
+      <div class="hero-container">
+        <div class="live-pill">
+          <span class="live-pulse"></span>
+          <span>Live Walk-In Waiting Coordination Active</span>
+        </div>
+
+        <h1 class="hero-title">
+          Calm, Transparent Walk-In Care.<br>
+          <span>No Verbal Shouting. No Queue Disputes.</span>
+        </h1>
+
+        <p class="hero-subtitle">
+          Verbal walk-in lines generate uncertainty, crowded waiting rooms, and heated disputes. 
+          MediQueue pairs minimal patient privacy tokens with real-time waiting-time estimation 
+          with dynamic uncertainty bounds and triage-aware coordination.
+        </p>
+
+        <div class="hero-cta-group">
+          <button class="btn btn-accent btn-lg" onclick="App.navigate('board')">
+            📺 View Reception Queue Board
+          </button>
+          <button class="btn btn-primary btn-lg" onclick="App.openCreateTokenModal()">
+            ➕ Issue Walk-In Token
+          </button>
+          <button class="btn btn-secondary btn-lg" onclick="document.getElementById('public-tracker-card').scrollIntoView({ behavior: 'smooth' })">
+            🔍 Track Patient Token
+          </button>
+        </div>
+
+        <!-- Live Queue Snapshot Card -->
+        <div class="queue-board-banner" style="margin-top: 2.5rem; text-align: left;">
+          <div class="qbb-header">
+            <div class="qbb-title">
+              <span class="live-pulse"></span>
+              Live Reception Hall Status
+            </div>
+            <div class="qbb-time">
+              Operating Hours: <span id="public-clinic-hours">08:00 - 20:00</span>
+            </div>
+          </div>
+          <div id="landing-preview-board" style="padding: 1.5rem;">
+            <div class="empty-box"><span class="spinner-icon">🔄</span> Syncing clinic tokens...</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Public Token Tracker Section -->
+    <section id="public-tracker-card" style="max-width: 760px; margin: -2rem auto 4rem auto; padding: 0 1rem; position: relative; z-index: 10;">
+      <div class="panel" style="box-shadow: var(--shadow-xl); border: 2px solid var(--color-primary-border);">
+        <div class="panel-header" style="background: var(--color-primary-bg);">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 1.3rem;">📱</span>
+            <div>
+              <h3 class="panel-title" style="color: var(--color-primary-dark);">Self-Service Patient Token Tracker</h3>
+              <p style="font-size: 0.8rem; color: var(--color-text-secondary); margin: 0;">Check your real-time waiting window and assigned consultation room.</p>
+            </div>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div style="display: flex; gap: 10px; margin-bottom: 12px;">
+            <input type="text" id="public-tracker-input" class="form-control" placeholder="Enter Token Number (e.g. GM-001, GM-002, PD-001)" style="font-family: var(--font-mono); font-weight: 700; font-size: 1.05rem; text-transform: uppercase;">
+            <button class="btn btn-primary" onclick="App.trackPublicToken()" style="white-space: nowrap; padding: 0 1.5rem;">Track Token</button>
+          </div>
+          <div style="display: flex; gap: 6px; font-size: 0.78rem; color: var(--color-text-secondary); align-items: center;">
+            <span>Try sample tokens:</span>
+            <button class="btn btn-outline btn-sm" style="padding: 1px 6px; font-size: 0.75rem;" onclick="document.getElementById('public-tracker-input').value='T-101'; App.trackPublicToken();">T-101</button>
+            <button class="btn btn-outline btn-sm" style="padding: 1px 6px; font-size: 0.75rem;" onclick="document.getElementById('public-tracker-input').value='P-104'; App.trackPublicToken();">P-104</button>
+            <button class="btn btn-outline btn-sm" style="padding: 1px 6px; font-size: 0.75rem;" onclick="document.getElementById('public-tracker-input').value='U-105'; App.trackPublicToken();">U-105</button>
+            <button class="btn btn-outline btn-sm" style="padding: 1px 6px; font-size: 0.75rem;" onclick="document.getElementById('public-tracker-input').value='T-106'; App.trackPublicToken();">T-106</button>
+          </div>
+
+          <!-- Dynamic Result Box -->
+          <div id="public-tracker-result" class="hidden" style="margin-top: 1.25rem;"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Project Features Grid -->
+    <section class="features-section">
+      <div class="hero-container">
+        <div class="section-head">
+          <h2>Clinical Waiting Coordination Capabilities</h2>
+          <p>Engineered for high-volume outpatient clinics and primary care centers.</p>
+        </div>
+
+        <div class="feature-cards">
+          <div class="feature-card">
+            <div class="fc-icon">🏷️</div>
+            <h3>Minimal Patient Token</h3>
+            <p>Discreet alphanumeric tokens (e.g. GM-003) preserve patient privacy on public displays while eliminating verbal confusion and line disputes.</p>
+          </div>
+
+          <div class="feature-card">
+            <div class="fc-icon">⏳</div>
+            <h3>Wait Time with Uncertainty</h3>
+            <p>Stochastically computed waiting windows (e.g. 15-25m) based on real-time consultation duration averages and active desk counts, setting transparent patient expectations.</p>
+          </div>
+
+          <div class="feature-card">
+            <div class="fc-icon">🚨</div>
+            <h3>Configurable Priority Triage</h3>
+            <p>Support for Emergency, Urgent, and Normal clinical tiers. High-priority patients automatically bubble to the head of the queue with documented triage justification.</p>
+          </div>
+
+          <div class="feature-card">
+            <div class="fc-icon">📝</div>
+            <h3>Mandatory Manual Override Reasons</h3>
+            <p>Strict clinical governance: staff cannot skip, cancel, or re-order patients without logging a mandatory operational override justification.</p>
+          </div>
+
+          <div class="feature-card">
+            <div class="fc-icon">📢</div>
+            <h3>Reception Queue Display Board</h3>
+            <p>High-contrast, large-format screen optimized for lobby TV monitors with real-time calling cards, counter direction, and audible chimes.</p>
+          </div>
+
+          <div class="feature-card">
+            <div class="fc-icon">📊</div>
+            <h3>Daily Operations Analytics</h3>
+            <p>Automated end-of-day operational summaries computing tokens served, average patient wait times, consultation times, and peak hourly traffic.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============================================================ -->
+  <!-- VIEW 2: LARGE RECEPTION QUEUE BOARD (Wall / TV Screen Mode)  -->
+  <!-- ============================================================ -->
+  <main id="view-board" class="board-fullscreen hidden">
+    <!-- Top Display Header -->
+    <header class="board-top-header">
+      <div class="board-brand">
+        <span style="font-size: 2rem;">🏥</span>
+        <div>
+          <div style="font-size: 1.4rem; font-weight: 800; letter-spacing: -0.01em;" class="clinic-name-text">MediQueue Clinical Care</div>
+          <div style="font-size: 0.85rem; color: rgba(255,255,255,0.7); text-transform: uppercase; letter-spacing: 0.05em;">Lobby Reception Waiting-Time Board</div>
+        </div>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 16px;">
+        <select id="board-dept-filter" class="form-control" style="background: rgba(255,255,255,0.12); color: #fff; border-color: rgba(255,255,255,0.2); font-weight: 600; width: 230px;">
+          <option value="">All Clinical Departments</option>
+        </select>
+
+        <button class="btn btn-secondary btn-sm" onclick="QueueBoard.playChime()" title="Test Lobby Chime" style="color: #fff; border-color: rgba(255,255,255,0.3); background: rgba(255,255,255,0.08);">
+          🔔 Test Chime
+        </button>
+
+        <div class="board-clock" id="board-live-clock">--:--:--</div>
+
+        <button class="btn btn-secondary btn-sm" onclick="App.navigate('landing')" style="color: #fff; border-color: rgba(255,255,255,0.3); background: rgba(255,255,255,0.08);">
+          ✕ Exit Board
+        </button>
+      </div>
+    </header>
+
+    <!-- 3-Column Queue Board Layout -->
+    <div class="board-columns-layout">
+      <!-- Column 1: Now Calling -->
+      <div class="board-column-card">
+        <div class="board-col-title" style="border-bottom-color: var(--color-called); color: #fef08a;">
+          <span style="display: flex; align-items: center; gap: 8px;">
+            <span class="live-pulse" style="width: 10px; height: 10px;"></span>
+            NOW CALLING
+          </span>
+          <span style="font-size: 0.85rem; font-weight: 500; color: rgba(255,255,255,0.75);">Report to Desk</span>
+        </div>
+        <div id="board-col-called" class="board-col-body">
+          <div class="empty-box"><span class="spinner-icon">🔄</span> Loading...</div>
+        </div>
+      </div>
+
+      <!-- Column 2: In Consultation -->
+      <div class="board-column-card">
+        <div class="board-col-title" style="border-bottom-color: var(--color-consultation); color: #ddd6fe;">
+          <span>🩺 IN CONSULTATION</span>
+          <span style="font-size: 0.85rem; font-weight: 500; color: rgba(255,255,255,0.75);">In Physician Room</span>
+        </div>
+        <div id="board-col-consult" class="board-col-body">
+          <div class="empty-box"><span class="spinner-icon">🔄</span> Loading...</div>
+        </div>
+      </div>
+
+      <!-- Column 3: Waiting in Queue with Uncertainty -->
+      <div class="board-column-card">
+        <div class="board-col-title" style="border-bottom-color: var(--color-primary-light); color: #a7f3d0;">
+          <span>⏳ NEXT IN LINE</span>
+          <span id="board-waiting-count" class="badge" style="background: rgba(255,255,255,0.15); color: #fff; font-size: 0.85rem;">0 in queue</span>
+        </div>
+        <div id="board-col-waiting" class="board-col-body">
+          <div class="empty-box"><span class="spinner-icon">🔄</span> Loading...</div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ============================================================ -->
+  <!-- VIEW 3: STAFF & OPERATOR / ADMIN APPLICATION SHELL           -->
+  <!-- ============================================================ -->
+  <div id="view-app" class="app-container hidden">
+    <!-- Sidebar -->
+    <aside class="app-sidebar">
+      <div class="sidebar-header">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 1.5rem;">🏥</span>
+          <div>
+            <div style="font-weight: 800; font-size: 1rem; color: var(--color-primary-dark);" class="clinic-name-text">MediQueue</div>
+            <div style="font-size: 0.7rem; color: var(--color-text-secondary); text-transform: uppercase;">Operations Console</div>
+          </div>
+        </div>
+      </div>
+
+      <nav class="sidebar-menu">
+        <div class="menu-cat">COORDINATION DESK</div>
+        <button class="menu-item active" data-tab="tokens" onclick="App.switchAppTab('tokens')">
+          <span class="menu-item-icon">📋</span>
+          <span>Patient Token Desk</span>
+        </button>
+        <button class="menu-item" onclick="App.navigate('board')">
+          <span class="menu-item-icon">📺</span>
+          <span>Open Lobby Board</span>
+        </button>
+
+        <div class="menu-cat">ANALYTICS & REPORTING</div>
+        <button class="menu-item" data-tab="dashboard" onclick="App.switchAppTab('dashboard')">
+          <span class="menu-item-icon">📊</span>
+          <span>Daily Operations Summary</span>
+        </button>
+
+        <div class="menu-cat admin-only">ADMINISTRATION</div>
+        <button class="menu-item admin-only" data-tab="departments" onclick="App.switchAppTab('departments')">
+          <span class="menu-item-icon">🏢</span>
+          <span>Departments & Desks</span>
+        </button>
+        <button class="menu-item admin-only" data-tab="settings" onclick="App.switchAppTab('settings')">
+          <span class="menu-item-icon">⚙️</span>
+          <span>Clinic System Settings</span>
+        </button>
+      </nav>
+
+      <!-- Sidebar User Profile -->
+      <div class="sidebar-user" id="sidebar-user-info"></div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="app-main">
+      <!-- Topbar -->
+      <header class="app-topbar">
+        <div class="topbar-title-section">
+          <h2 class="page-heading" id="topbar-page-title">Token Coordination Desk</h2>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <button class="btn btn-primary" id="open-create-token-btn" onclick="App.openCreateTokenModal()">
+            ➕ Issue Walk-In Token
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="App.navigate('landing')">
+            🏠 Public Site
+          </button>
+        </div>
+      </header>
+
+      <!-- Content Views -->
+      <div class="app-content">
+        <!-- Tab 1: Token Desk Panel -->
+        <section id="panel-tokens">
+          <div class="panel">
+            <div class="panel-header">
+              <h3 class="panel-title">Active Walk-In Queue Management</h3>
+              <div style="font-size: 0.82rem; color: var(--color-text-secondary);">
+                Real-time queue coordination, triage escalation, and state transitions
+              </div>
+            </div>
+
+            <div class="panel-body">
+              <!-- Filter & Search Toolbar -->
+              <div class="toolbar-bar">
+                <div class="search-box">
+                  <span class="search-box-icon">🔍</span>
+                  <input type="text" id="token-search-input" placeholder="Search patient name, token number, or phone...">
+                </div>
+
+                <div class="flex items-center gap-2 flex-wrap">
+                  <select id="token-dept-filter" class="select-filter">
+                    <option value="">All Departments</option>
+                  </select>
+
+                  <select id="token-status-filter" class="select-filter">
+                    <option value="">All Statuses</option>
+                    <option value="waiting">Waiting</option>
+                    <option value="called">Called</option>
+                    <option value="in_consultation">In Consultation</option>
+                    <option value="completed">Completed</option>
+                    <option value="skipped">Skipped</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+
+                  <select id="token-priority-filter" class="select-filter">
+                    <option value="">All Priorities</option>
+                    <option value="normal">Normal</option>
+                    <option value="urgent">Urgent</option>
+                    <option value="emergency">Emergency</option>
+                  </select>
+
+                  <select id="token-sort-filter" class="select-filter">
+                    <option value="created_at">Order: Arrival Time</option>
+                    <option value="priority">Order: Priority First</option>
+                    <option value="token_number">Order: Token Number</option>
+                  </select>
+
+                  <button class="btn btn-secondary btn-sm" onclick="TokensModule.fetchTokens()" title="Refresh List">
+                    🔄 Refresh
+                  </button>
+                </div>
+              </div>
+
+              <!-- Tokens Table -->
+              <div class="table-responsive">
+                <table class="token-table">
+                  <thead>
+                    <tr>
+                      <th>Token #</th>
+                      <th>Patient Name & Demographics</th>
+                      <th>Department</th>
+                      <th>Priority & Justification</th>
+                      <th>Estimated Wait Window</th>
+                      <th>Current State</th>
+                      <th>Assigned Desk</th>
+                      <th>Operational Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tokens-table-body">
+                    <tr><td colspan="8" class="empty-box"><span class="spinner-icon">🔄</span> Loading clinic tokens...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Tab 2: Analytics & Daily Summary Panel -->
+        <section id="panel-dashboard" class="hidden">
+          <!-- Stat Cards -->
+          <div class="stat-cards-grid">
+            <div class="stat-card">
+              <div class="sc-icon primary">📋</div>
+              <div class="sc-details">
+                <div class="sc-num" id="dash-total-tokens">-</div>
+                <div class="sc-label">Total Walk-Ins Today</div>
+                <div class="sc-subtext">Registered at reception</div>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="sc-icon warning">⏳</div>
+              <div class="sc-details">
+                <div class="sc-num" id="dash-waiting-tokens">-</div>
+                <div class="sc-label">Waiting in Hall</div>
+                <div class="sc-subtext">Pending consultation</div>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="sc-icon purple">🩺</div>
+              <div class="sc-details">
+                <div class="sc-num" id="dash-consult-tokens">-</div>
+                <div class="sc-label">In Consultation</div>
+                <div class="sc-subtext">Active physician sessions</div>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="sc-icon success">✓</div>
+              <div class="sc-details">
+                <div class="sc-num" id="dash-completed-tokens">-</div>
+                <div class="sc-label">Completed Visits</div>
+                <div class="sc-subtext">Discharged today</div>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="sc-icon primary">⏱️</div>
+              <div class="sc-details">
+                <div class="sc-num" id="dash-avg-wait">-</div>
+                <div class="sc-label">Avg Actual Wait</div>
+                <div class="sc-subtext">Completed patients</div>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="sc-icon warning">⚡</div>
+              <div class="sc-details">
+                <div class="sc-num" id="dash-max-wait">-</div>
+                <div class="sc-label">Longest Wait</div>
+                <div class="sc-subtext">Peak wait duration</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Charts Row -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px;">
+            <div class="panel">
+              <div class="panel-header">
+                <h3 class="panel-title">Triage Priority Distribution</h3>
+              </div>
+              <div class="panel-body">
+                <div id="priority-breakdown-box" style="padding-top: 10px;">
+                  <span class="spinner-icon">🔄</span> Computing priority distribution...
+                </div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-header">
+                <h3 class="panel-title">Hourly Patient Arrival Load (8h - 19h)</h3>
+              </div>
+              <div class="panel-body">
+                <div id="hourly-load-chart">
+                  <span class="spinner-icon">🔄</span> Computing arrival traffic...
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Historical Daily Summaries Table -->
+          <div class="panel">
+            <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <h3 class="panel-title">Daily Operations Summary Archive</h3>
+                <p style="font-size: 0.8rem; color: var(--color-text-secondary); margin: 0;">Audit summaries for capacity planning and clinic workflow evaluation.</p>
+              </div>
+              <button class="btn btn-primary btn-sm admin-only" id="btn-run-daily-summary" onclick="DashboardModule.triggerDailySummary()">
+                ⚡ Compute Today's Daily Summary
+              </button>
+            </div>
+            <div class="panel-body">
+              <div class="table-responsive">
+                <table class="token-table">
+                  <thead>
+                    <tr>
+                      <th>Summary Date</th>
+                      <th>Department</th>
+                      <th>Total Walk-Ins</th>
+                      <th>Completed</th>
+                      <th>Avg Wait Time</th>
+                      <th>Avg Consultation Duration</th>
+                      <th>Peak Arrival Hour</th>
+                    </tr>
+                  </thead>
+                  <tbody id="daily-summaries-body">
+                    <tr><td colspan="7" class="empty-box"><span class="spinner-icon">🔄</span> Loading summaries...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Tab 3: Departments & Counters Management Panel -->
+        <section id="panel-departments" class="hidden">
+          <div class="panel" style="margin-bottom: 24px;">
+            <div class="panel-header">
+              <h3 class="panel-title">Clinical Departments</h3>
+              <p style="font-size: 0.8rem; color: var(--color-text-secondary); margin: 0;">Average consultation durations drive the waiting-time uncertainty model.</p>
+            </div>
+            <div class="panel-body" id="depts-list-container"></div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">
+              <h3 class="panel-title">Service Desks & Counters</h3>
+              <p style="font-size: 0.8rem; color: var(--color-text-secondary); margin: 0;">Assign staff members and toggle counter operating status.</p>
+            </div>
+            <div class="panel-body" id="counters-list-container"></div>
+          </div>
+        </section>
+
+        <!-- Tab 4: System Settings Panel -->
+        <section id="panel-settings" class="hidden">
+          <div id="settings-list-container"></div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- MODAL: ISSUE WALK-IN TOKEN                                   -->
+  <!-- ============================================================ -->
+  <div class="modal-backdrop hidden" id="create-token-modal">
+    <div class="modal-dialog" style="max-width: 600px;">
+      <div class="modal-header">
+        <h3 class="modal-title">➕ Issue New Walk-In Token</h3>
+        <button class="modal-close-btn" onclick="App.closeModal('create-token-modal')">×</button>
+      </div>
+      <form id="create-token-form">
+        <div class="modal-body">
+          <div class="form-grid">
+            <div class="form-group full-width">
+              <label class="form-label">Patient Full Name <span class="req">*</span></label>
+              <input type="text" id="token-name-input" class="form-control" placeholder="e.g. Meera Krishnan" required minlength="2">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Phone Number</label>
+              <input type="tel" id="token-phone-input" class="form-control" placeholder="e.g. +91-9876543210">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Age & Gender</label>
+              <div style="display: flex; gap: 8px;">
+                <input type="number" id="token-age-input" class="form-control" placeholder="Age" min="0" max="120" style="width: 80px;">
+                <select id="token-gender-input" class="form-control">
+                  <option value="">Gender</option>
+                  <option value="Female">Female</option>
+                  <option value="Male">Male</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group full-width">
+              <label class="form-label">Clinical Department <span class="req">*</span></label>
+              <select id="token-dept-input" class="form-control" required>
+                <option value="">Select Department</option>
+              </select>
+            </div>
+
+            <div class="form-group full-width">
+              <label class="form-label">Priority Triage Tier</label>
+              <select id="token-priority-input" class="form-control" onchange="
+                const val = this.value;
+                const reasonGroup = document.getElementById('priority-reason-group');
+                if (val !== 'normal') reasonGroup.classList.remove('hidden');
+                else reasonGroup.classList.add('hidden');
+              ">
+                <option value="normal">Normal / Standard Routine Walk-In</option>
+                <option value="urgent">Urgent Priority (Fever / Acute Pain / Elderly)</option>
+                <option value="emergency">Emergency / Critical (Immediate Attention)</option>
+              </select>
+            </div>
+
+            <div class="form-group full-width hidden" id="priority-reason-group">
+              <label class="form-label">Priority Clinical Justification <span class="req">*</span></label>
+              <input type="text" id="token-priority-reason-input" class="form-control" placeholder="e.g. SpO2 91%, High respiratory distress, severe laceration">
+              <span style="font-size: 0.72rem; color: var(--color-text-muted);">Required when escalating above standard normal walk-in queue.</span>
+            </div>
+
+            <div class="form-group full-width">
+              <label class="form-label">Clinical / Reception Notes</label>
+              <textarea id="token-notes-input" class="form-control" rows="2" placeholder="e.g. Needs wheelchair assistance, wheelchair provided"></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="App.closeModal('create-token-modal')">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="save-token-btn">Generate Token</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- MODAL: LOGIN / AUTH                                          -->
+  <!-- ============================================================ -->
+  <div class="modal-backdrop hidden" id="login-modal">
+    <div class="modal-dialog" style="max-width: 480px;">
+      <div class="modal-header">
+        <h3 class="modal-title">🔐 Clinical Console Login</h3>
+        <button class="modal-close-btn" onclick="App.closeModal('login-modal')">×</button>
+      </div>
+      <form onsubmit="App.submitLogin(event)">
+        <div class="modal-body">
+          <!-- 1-Click Fast Demo Autofill Selector -->
+          <div style="background: var(--color-primary-bg); border: 1px solid var(--color-primary-border); border-radius: var(--radius-md); padding: 12px; margin-bottom: 16px;">
+            <div style="font-size: 0.8rem; font-weight: 700; color: var(--color-primary-dark); margin-bottom: 6px;">⚡ Quick Demo Login (Click to Sign In):</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+              <button type="button" class="btn btn-secondary btn-sm" onclick="App.demoLogin('admin')">
+                👑 <strong>Admin</strong> (Dr. Arthur)
+              </button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="App.demoLogin('staff')">
+                📋 <strong>Reception</strong> (Nurse Clara)
+              </button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="App.demoLogin('doctor')">
+                🩺 <strong>Doctor</strong> (Dr. Sarah)
+              </button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="App.demoLogin('patient')">
+                🧑 <strong>Patient</strong> (Eleanor)
+              </button>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 12px;">
+            <label class="form-label">Email Address</label>
+            <input type="email" id="login-email-input" class="form-control" value="reception@clinic.org" required>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 12px;">
+            <label class="form-label">Password</label>
+            <input type="password" id="login-password-input" class="form-control" value="Demo@1234" required>
+          </div>
+
+          <div style="font-size: 0.75rem; color: var(--color-text-muted);">
+            Demo accounts use standard password: <code>Demo@1234</code>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="App.closeModal('login-modal')">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="login-submit-btn">Login to Console</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Application Scripts -->
+  <script src="/js/api.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/tokens.js"></script>
+  <script src="/js/queueBoard.js"></script>
+  <script src="/js/dashboard.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>
